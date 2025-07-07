@@ -4,10 +4,12 @@ import path from 'path';
 // Define log directory
 const logDir = path.resolve(__dirname, '../../logs');
 
+
 // Define custom log format
 const logFormat = format.printf(({ timestamp, level, message, stack }) => {
   return `${timestamp} [${level}]: ${stack || message}`;
 });
+
 
 const logger = createLogger({
   level: 'info', // Default log level
