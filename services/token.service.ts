@@ -27,11 +27,14 @@ class TokenService {
     return jwt.sign(payload, this.jwtSecret);
   }
 
-  async generateAuthTokens(userId: string) {
+  async generateAuthTokens(userId: string, rememberMe: boolean) {
     const accessTokenExpires = dayjs().add(1, 'hour');
     const accessToken = this.generateToken(userId, accessTokenExpires, tokenTypes.ACCESS);
 
-    const refreshTokenExpires = dayjs().add(7, 'days');
+    const refreshTokenExpires = rememberMe
+      ? dayjs().add(7, 'days')
+      : dayjs().add(1, 'hour');
+
     const refreshToken = this.generateToken(userId, refreshTokenExpires, tokenTypes.REFRESH);
 
     await this.saveToken(refreshToken, userId, refreshTokenExpires.toDate(), tokenTypes.REFRESH);
@@ -45,8 +48,11 @@ class TokenService {
         token: refreshToken,
         expires: refreshTokenExpires.toDate(),
       },
+      rememberMe, // ⬅️ Include the flag
     };
   }
+
+
 
   async saveToken(
     token: string,

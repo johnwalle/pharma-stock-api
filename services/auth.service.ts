@@ -69,8 +69,10 @@ export const refreshAuthToken = async (refreshToken: string) => {
 
   await tokenService.removeToken(user._id.toString());
 
-  return tokenService.generateAuthTokens(user._id.toString());
+  // If you want, default rememberMe to true here:
+  return tokenService.generateAuthTokens(user._id.toString(), true);
 };
+
 
 // SEND RESET EMAIL
 export const sendEmail = async (
