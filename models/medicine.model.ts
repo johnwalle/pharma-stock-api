@@ -17,7 +17,7 @@ export interface IMedicine extends Document {
   prescriptionStatus: string;
   pricePerUnit: number;
   receivedDate: string;
-  status: 'active' | 'inactive' | 'discontinued' | 'out-of-stock';
+  status: 'available' | 'low-stock' | 'out-of-stock';
   imageURL?: string;
   notes?: string;
   isDeleted: boolean;
@@ -27,11 +27,11 @@ const medicineSchema = new Schema<IMedicine>(
   {
     brandName: { type: String, required: true, trim: true },
     genericName: { type: String, required: true, trim: true },
-    dosageForm: { 
-      type: String, 
-      required: true, 
+    dosageForm: {
+      type: String,
+      required: true,
       enum: ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Inhaler', 'Other'],
-      trim: true 
+      trim: true
     },
     strength: { type: String, required: true, trim: true },
     currentStockLevel: { type: Number, required: true, min: 0 },
@@ -41,24 +41,24 @@ const medicineSchema = new Schema<IMedicine>(
     batchNumber: { type: String, required: true, unique: true, trim: true },
     storageConditions: { type: String, trim: true },
     supplierInfo: { type: String, trim: true },
-    storageLocation: { 
-      type: String, 
+    storageLocation: {
+      type: String,
       enum: ['Pharmacy Shelf A', 'Pharmacy Shelf B', 'Refrigerator', 'Controlled Storage', 'Other', ''],
-      trim: true 
+      trim: true
     },
-    prescriptionStatus: { 
-      type: String, 
-      required: true, 
+    prescriptionStatus: {
+      type: String,
+      required: true,
       enum: ['Prescription', 'OTC', 'Controlled'],
-      trim: true 
+      trim: true
     },
     pricePerUnit: { type: Number, required: true, min: 0 },
     receivedDate: { type: String, required: true },
-    status: { 
-      type: String, 
-      required: true, 
-      enum: ['active', 'inactive', 'discontinued', 'out-of-stock'],
-      default: 'active' 
+    status: {
+      type: String,
+      required: true,
+      enum: ['available', 'low-stock', 'out-of-stock'],
+      default: 'available'
     },
     imageURL: { type: String, trim: true },
     notes: { type: String, trim: true },
