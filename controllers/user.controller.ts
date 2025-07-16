@@ -9,12 +9,14 @@ import bcrypt from 'bcryptjs';
 import httpStatus from 'http-status';
 import ApiError from '../utils/ApiError';
 import catchAsync from '../utils/catchAsync';
+import userService from '../services/user.service';
 
 /**
  * @desc    Register a new user
  * @route   POST /api/v1/auth/register
  */
 export const register = catchAsync(async (req: Request, res: Response) => {
+  console.log("the request body", req.body);
   const { fullName, email, password } = req.body;
 
   if (!fullName || !email || !password) {
@@ -67,14 +69,12 @@ export const logout = (req: Request, res: Response): void => {
 
 export const updateUser = catchAsync(async (req: Request, res: Response) => {
   const userId = req.params.id;
-
+  
+  
   const currentUsr = req.currentUser;
   console.log("the current user is", currentUsr)
 
-  if (currentUsr?._id.toString() !== userId && currentUsr?.role !== 'Admin') {
-    throw new ApiError(httpStatus.FORBIDDEN, 'You can only update your own profile or you must be an admin');
-  }
-
+  
   const user = await User.findById(userId);
   if (!user || user.isDeleted) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
@@ -116,7 +116,7 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
  */
 export const deleteUser = catchAsync(async (req: Request, res: Response) => {
   const userId = req.params.id;
-
+  console.log("the users id is", userId)
   const user = await User.findById(userId);
   if (!user || user.isDeleted) {
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found or already deleted');
@@ -141,6 +141,8 @@ export const deleteUser = catchAsync(async (req: Request, res: Response) => {
 export const createUserByAdmin = catchAsync(async (req: Request, res: Response) => {
 
   const { fullName, email, password, role } = req.body;
+
+  console.log("the request body for creating user by admin", req.body);
 
   if (!fullName || !email || !password || !role) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
@@ -176,3 +178,15 @@ export const createUserByAdmin = catchAsync(async (req: Request, res: Response) 
     message: 'User created successfully',
   });
 });
+
+
+// get all users
+
+export const getUsers = catchAsync(async (req: Request, res: Response) => {
+  const currentUserId = req.currentUser?._id.toString();
+  const users = await userService.getUsersService(currentUserId);
+  res.status(httpStatus.OK).json({
+    success: true,
+    data: users,
+  });
+})

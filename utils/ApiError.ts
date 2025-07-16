@@ -24,6 +24,12 @@ class ApiError extends Error {
   }
 
   toJSON() {
+    console.error('API Error:', {
+      statusCode: this.statusCode,
+      message: this.message,
+      stack: this.stack,
+    });
+    
     return {
       error: true,
       code: this.statusCode,

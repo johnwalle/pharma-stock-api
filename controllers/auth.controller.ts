@@ -16,13 +16,14 @@ const tokenService = new TokenService();
 
 // Login Controller
 export const login = catchAsync(async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, rememberMe } = req.body;  // added rememberMe
 
   const user = await authService.login(email, password, req.ip ?? 'unknown');
-  const tokens = await tokenService.generateAuthTokens(user.id);
+  const tokens = await tokenService.generateAuthTokens(user.id, rememberMe); // pass rememberMe
 
   res.status(httpStatus.OK).json({ user, tokens });
 });
+
 
 // Forgot Password Controller
 export const forgotPassword = catchAsync(async (req: Request, res: Response) => {
@@ -34,7 +35,7 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
   }
 
   await tokenService.removeToken(user._id.toString());
-  const tokens = await tokenService.generateAuthTokens(user._id.toString());
+  const tokens = await tokenService.generateAuthTokens(user._id.toString(), false);
 
   const resetToken = tokens.refresh.token;
 
@@ -47,6 +48,7 @@ export const forgotPassword = catchAsync(async (req: Request, res: Response) => 
 export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   const { token } = req.params;
   const { password } = req.body;
+
 
   const tokenDoc = await tokenService.findToken(token);
   if (!tokenDoc) {
