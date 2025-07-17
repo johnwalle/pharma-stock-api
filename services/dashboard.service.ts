@@ -73,26 +73,6 @@ export const getDashboardAnalyticsService = async () => {
     { name: 'Out of Stock', value: outOfStock },
   ];
 
-  // === EXPIRY TRENDS OVER 6 MONTHS ===
-  const expiryTrends = [];
-
-  for (let i = 0; i < 6; i++) {
-    const start = startOfMonth(addMonths(today, i));
-    const end = endOfMonth(start);
-
-    const count = await Medicine.countDocuments({
-      isDeleted: false,
-      expiryDate: {
-        $gte: start,
-        $lte: end,
-      },
-    });
-
-    expiryTrends.push({
-      month: start.toLocaleString('default', { month: 'short' }),
-      items: count,
-    });
-  }
 
   // === FINAL RETURN ===
   return {
@@ -100,7 +80,6 @@ export const getDashboardAnalyticsService = async () => {
     charts: {
       topUsedMedicines: topUsed,
       stockStatus,
-      expiryTrends,
     },
   };
 };
