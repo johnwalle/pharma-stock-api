@@ -6,6 +6,7 @@ import authRoutes from '../routes/auth.routes';
 import userRoutes from '../routes/user.route'
 import medicineRoutes from '../routes/medicine.routes';
 import sellRoutes from '../routes/sell.routes';
+import reportRoutes from '../routes/report.routes';
 const app = express();
 
 // Global middlewares
@@ -19,6 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/medicines', medicineRoutes);
 app.use('/api/sell', sellRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Optional: Root health check
 app.get('/', (_, res) => {
