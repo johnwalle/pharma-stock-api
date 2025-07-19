@@ -11,6 +11,7 @@ import {
   deleteMedicineService,
   getAllMedicinesService,
 } from '../services/medicine.service';
+import { createAuditLog } from '../services/auditLog.service';
 
 
 
@@ -19,6 +20,7 @@ import {
  * @route   POST /api/v1/medicines
  * @access  Admin or Pharmacist only
  */
+
 export const createMedicine = catchAsync(async (req: Request, res: Response) => {
   const {
     brandName,
@@ -46,6 +48,7 @@ export const createMedicine = catchAsync(async (req: Request, res: Response) => 
     pricePerUnit,
     receivedDate,
   ];
+
   if (requiredFields.some(field => field === undefined || field === null || field === '')) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
   }
@@ -54,17 +57,28 @@ export const createMedicine = catchAsync(async (req: Request, res: Response) => 
     throw new ApiError(httpStatus.BAD_REQUEST, 'Image file is required');
   }
 
+  // ✅ Create the medicine entry
   const medicine = await createMedicineService({
     ...req.body,
     file: req.file,
   });
 
+  // ✅ Log the action to audit log
+  await createAuditLog({
+    userId: req.currentUser._id,
+    userName: req.currentUser.fullName,          // ⬅️ Assumes auth middleware sets this
+    action: 'Add',
+    details: `Added medicine: ${brandName} (${strength}, Batch: ${batchNumber}, Qty: ${currentStockLevel})`,
+  });
+
+  // ✅ Response
   res.status(httpStatus.CREATED).json({
     success: true,
     message: 'Medicine created successfully',
     data: medicine,
   });
 });
+
 
 
 
@@ -129,6 +143,14 @@ export const updateMedicine = catchAsync(async (req: Request, res: Response) => 
 
   const updatedMedicine = await updateMedicineService(medicineId, updatePayload);
 
+  // ✅ Log the action to audit log
+  await createAuditLog({
+    userId: req.currentUser._id,
+    userName: req.currentUser.fullName,          // ⬅️ Assumes auth middleware sets this
+    action: 'Edit',
+    details: `Updated medicine: ${brandName || existingMedicine.brandName} (${strength || existingMedicine.strength}, Batch: ${batchNumber || existingMedicine.batchNumber}, Qty: ${currentStockLevel || existingMedicine.currentStockLevel})`,
+  });
+
   res.status(httpStatus.OK).json({
     success: true,
     message: 'Medicine updated successfully',
@@ -145,8 +167,22 @@ export const updateMedicine = catchAsync(async (req: Request, res: Response) => 
 
 export const deleteMedicine = catchAsync(async (req: Request, res: Response) => {
   const { medicineId } = req.params;
+  // ✅ Check if medicine exists
+  const existingMedicine = await getMedicineById(medicineId);
+  if (!existingMedicine) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found');
+  }
+
 
   await deleteMedicineService(medicineId);
+
+  // ✅ Log the action to audit log
+  await createAuditLog({
+    userId: req.currentUser._id,
+    userName: req.currentUser.fullName,          // ⬅️ Assumes auth middleware sets this
+    action: 'Delete',
+    details: `Deleted medicine: ${existingMedicine.brandName} (${existingMedicine.strength}, Batch: ${existingMedicine.batchNumber}, Qty: ${existingMedicine.currentStockLevel})`,
+  });
 
   res.status(httpStatus.OK).json({
     success: true,
