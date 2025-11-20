@@ -1,238 +1,223 @@
-// services/medicine.service.ts
 import httpStatus from 'http-status';
+import { Types } from 'mongoose';
 import Medicine, { IMedicine } from '../models/medicine.model';
 import ApiError from '../utils/ApiError';
 import logger from '../config/logger';
-
-
-
 const cloudinary = require('../config/cloudinary.config');
 
 interface CreateMedicineInput extends Partial<IMedicine> {
-    file?: Express.Multer.File;
+  file?: Express.Multer.File;
 }
 
-
+// --------------------------
+// CREATE MEDICINE SERVICE
+// --------------------------
 export const createMedicineService = async (data: CreateMedicineInput) => {
-    const {
-        brandName,
-        genericName,
-        dosageForm,
-        strength,
-        currentStockLevel,
-        reorderThreshold = 0,
-        reorderQuantity = 0,
-        expiryDate,
-        batchNumber,
-        storageConditions,
-        supplierInfo,
-        storageLocation,
-        prescriptionStatus,
-        pricePerUnit,
-        receivedDate,
-        notes = '',
-        file,
-    } = data;
+  const {
+    brandName,
+    genericName,
+    dosageForm,
+    strength,
+    unitType,
+    unitQuantity,
+    subUnitQuantity, // optional
+    purchaseCost,
+    sellingPrice,
+    reorderThreshold = 0,
+    expiryDate,
+    batchNumber,
+    storageConditions,
+    supplierInfo,
+    storageLocation,
+    prescriptionStatus,
+    receivedDate,
+    notes = '',
+    file, // Multer file
+  } = data;
 
-    // ✅ Check for missing required fields
-    const required = [
-        brandName,
-        genericName,
-        dosageForm,
-        strength,
-        currentStockLevel,
-        expiryDate,
-        batchNumber,
-        prescriptionStatus,
-        pricePerUnit,
-        receivedDate,
-    ];
+  // --------------------------
+  // Required fields
+  // --------------------------
+  const required = [
+    brandName, genericName, dosageForm, strength, unitType,
+    unitQuantity, sellingPrice, expiryDate, batchNumber,
+    prescriptionStatus, receivedDate
+  ];
+  if (required.some(f => f === undefined || f === null || f === '')) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
+  }
 
-    if (required.some((f) => f === undefined || f === null || f === '')) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
-    }
+  if (!file || !file.buffer) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Image file is required');
+  }
 
-    if (!file || !file.buffer) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Image file is required');
-    }
+  // --------------------------
+  // Validate numeric fields
+  // --------------------------
+  if (Number(unitQuantity) < 0) throw new ApiError(httpStatus.BAD_REQUEST, 'unitQuantity cannot be negative');
+  if (subUnitQuantity !== undefined && Number(subUnitQuantity) <= 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'subUnitQuantity must be positive if provided');
+  }
+  if (Number(sellingPrice) < 0) throw new ApiError(httpStatus.BAD_REQUEST, 'sellingPrice cannot be negative');
+  if (purchaseCost !== undefined && Number(purchaseCost) < 0) throw new ApiError(httpStatus.BAD_REQUEST, 'purchaseCost cannot be negative');
 
-    // ✅ Validate numeric fields
-    const numericFields = [
-        { name: 'currentStockLevel', value: currentStockLevel },
-        { name: 'reorderThreshold', value: reorderThreshold },
-        { name: 'reorderQuantity', value: reorderQuantity },
-        { name: 'pricePerUnit', value: pricePerUnit },
-    ];
+  // --------------------------
+  // Prescription validation
+  // --------------------------
+  const validPrescription = ['Prescription', 'OTC', 'Controlled'];
+  if (!validPrescription.includes(prescriptionStatus!)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid prescription status value');
+  }
 
-    for (const field of numericFields) {
-        if (field.value !== undefined && Number(field.value) < 0) {
-            throw new ApiError(httpStatus.BAD_REQUEST, `${field.name} cannot be negative`);
-        }
-    }
+  // --------------------------
+  // Duplicate batch check
+  // --------------------------
+  const existing = await Medicine.findOne({ brandName, strength, batchNumber });
+  if (existing) throw new ApiError(httpStatus.BAD_REQUEST, 'This batch for the medicine already exists');
 
-    // ✅ Validate prescription status
-    const validPrescription = ['Prescription', 'OTC', 'Controlled'];
-    if (!validPrescription.includes(prescriptionStatus!)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid prescription status value');
-    }
+  // --------------------------
+  // Upload image
+  // --------------------------
+  const imageURL = await new Promise<string>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: 'Medicines', resource_type: 'image' },
+      (error: any, result: any) => {
+        if (error || !result) reject(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to upload image'));
+        else resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(file.buffer);
+  });
 
-    // ✅ Check for duplicate batch number
-    const existing = await Medicine.findOne({ batchNumber });
-    if (existing) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Medicine with this batch number already exists');
-    }
+  // --------------------------
+  // Status calculation (based on unitQuantity)
+  // --------------------------
+  const today = new Date();
+  const expiryDateObj = expiryDate ? new Date(expiryDate) : undefined;
 
-    // ✅ Upload image to Cloudinary
-    const imageURL: string = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-            {
-                folder: 'Medicines',
-                resource_type: 'image',
-            },
-            (error: any, result: any) => {
-                if (error || !result) {
-                    logger.error(`Cloudinary upload error: ${error?.message || 'Unknown error'}`);
-                    reject(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to upload image'));
-                } else {
-                    logger.info('📸 Image uploaded to Cloudinary');
-                    resolve(result.secure_url);
-                }
-            }
-        ).end(file.buffer);
-    });
+  let status: 'available' | 'low-stock' | 'out-of-stock' | 'expired' = 'available';
 
-    // ✅ Create medicine in DB
-    const newMedicine = await Medicine.create({
-        brandName,
-        genericName,
-        dosageForm,
-        strength,
-        currentStockLevel,
-        reorderThreshold,
-        reorderQuantity,
-        expiryDate,
-        batchNumber,
-        storageConditions,
-        supplierInfo,
-        storageLocation,
-        prescriptionStatus,
-        pricePerUnit,
-        receivedDate,
-        notes,
-        imageURL,
-        isDeleted: false,
-    });
+  if (expiryDateObj && expiryDateObj < today) status = 'expired';
+  else if (Number(unitQuantity) === 0) status = 'out-of-stock';
+  else if (Number(unitQuantity) < Number(reorderThreshold)) status = 'low-stock';
 
-    return newMedicine;
+  //check the date
+  if (!receivedDate) throw new ApiError(httpStatus.BAD_REQUEST, "Received date is required");
+  const receivedDateObj = new Date(receivedDate);
+
+
+
+  // --------------------------
+  // Save medicine
+  // --------------------------
+  const newMedicine = await Medicine.create({
+    brandName,
+    genericName,
+    dosageForm,
+    strength,
+    unitType,
+    unitQuantity: Number(unitQuantity), // total stock in store
+    subUnitQuantity: subUnitQuantity ? Number(subUnitQuantity) : undefined, // optional
+    stockDispenser: 0, // initially zero
+    purchaseCost: purchaseCost ? Number(purchaseCost) : undefined,
+    sellingPrice: Number(sellingPrice),
+    reorderThreshold: Number(reorderThreshold),
+    expiryDate: expiryDateObj!,
+    batchNumber,
+    storageConditions: storageConditions || '',
+    supplierInfo: supplierInfo || '',
+    storageLocation: storageLocation || '',
+    prescriptionStatus,
+    receivedDate: new Date(receivedDateObj),
+    notes,
+    imageURL,
+    status,
+    isDeleted: false,
+  });
+
+  return newMedicine;
 };
 
 
-
-// services/medicine.service.ts
-import { Types } from 'mongoose';
-
-/**
- * Update a medicine by its ID
- * @param medicineId - The ID of the medicine to update
- * @param updateData - The fields to update
- * @returns The updated medicine document
- */
+// --------------------------
+// UPDATE MEDICINE SERVICE
+// --------------------------
 interface UpdateMedicineInput extends Partial<IMedicine> {
-    file?: Express.Multer.File;
+  file?: Express.Multer.File;
 }
 
 export const updateMedicineService = async (
-    medicineId: string,
-    updateData: UpdateMedicineInput
+  medicineId: string,
+  updateData: UpdateMedicineInput
 ) => {
-    if (!Types.ObjectId.isValid(medicineId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID format');
-    }
+  if (!Types.ObjectId.isValid(medicineId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID');
+  }
 
-    const existingMedicine = await Medicine.findById(medicineId);
-    if (!existingMedicine) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found');
-    }
+  const existingMedicine = await Medicine.findById(medicineId);
+  if (!existingMedicine || existingMedicine.isDeleted) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found');
+  }
 
-    // ✅ If a file is provided, upload it to Cloudinary and update imageURL
-    if (updateData.file && updateData.file.buffer) {
-        const imageURL: string = await new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-                {
-                    folder: 'Medicines',
-                    resource_type: 'image',
-                },
-                (error: any, result: any) => {
-                    if (error || !result) {
-                        logger.error(`Cloudinary upload error: ${error?.message || 'Unknown error'}`);
-                        reject(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to upload image'));
-                    } else {
-                        logger.info('📸 Image updated in Cloudinary');
-                        resolve(result.secure_url);
-                    }
-                }
-            ).end(updateData.file!.buffer); // <--- use non-null assertion here
-        });
+  // Handle file upload
+  if (updateData.file && updateData.file.buffer) {
+    const imageURL = await new Promise<string>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        { folder: 'Medicines', resource_type: 'image' },
+        (error: any, result: any) => {
+          if (error || !result) {
+            reject(new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to upload image'));
+          } else resolve(result.secure_url);
+        }
+      ).end(updateData.file!.buffer);
+    });
+    updateData.imageURL = imageURL;
+  }
+  delete updateData.file;
 
-        updateData.imageURL = imageURL;
-    }
+  // Auto-update status based on unitQuantity + stockDispenser
+  const storeQty = updateData.unitQuantity ?? existingMedicine.unitQuantity ?? 0;
+  const dispenserQty = updateData.stockDispenser ?? existingMedicine.stockDispenser ?? 0;
+  const totalStock = storeQty + dispenserQty;
+  const threshold = updateData.reorderThreshold ?? existingMedicine.reorderThreshold ?? 0;
+  const expiry = updateData.expiryDate ?? existingMedicine.expiryDate;
+  const today = new Date();
 
-    // ✅ Remove file buffer from update data before saving to DB
-    delete updateData.file;
+  if (expiry && new Date(expiry) < today) {
+    updateData.status = 'expired';
+  } else if (totalStock === 0) {
+    updateData.status = 'out-of-stock';
+  } else if (totalStock < threshold) {
+    updateData.status = 'low-stock';
+  } else {
+    updateData.status = 'available';
+  }
 
-    const updatedMedicine = await Medicine.findByIdAndUpdate(
-        medicineId,
-        { $set: updateData },
-        { new: true, runValidators: true }
-    );
+  const updatedMedicine = await Medicine.findByIdAndUpdate(
+    medicineId,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
 
-    return updatedMedicine;
+  return updatedMedicine;
 };
 
 
-
-//get medicine by ID service
 export const getMedicineById = async (medicineId: string) => {
-    if (!Types.ObjectId.isValid(medicineId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID format');
-    }
+  if (!Types.ObjectId.isValid(medicineId)) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID');
+  const medicine = await Medicine.findById(medicineId).lean();
+  if (!medicine || medicine.isDeleted) throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found or deleted');
+  return medicine;
+};
 
-    const medicine = await Medicine.findById(medicineId).lean();
-    // check also if it is deleted
-    if (!medicine || medicine.isDeleted) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found or has been deleted');
-    }
-    return medicine;
-}
-
-//delete medicine service
 export const deleteMedicineService = async (medicineId: string) => {
-    if (!Types.ObjectId.isValid(medicineId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID format');
-    }
-
-    const existingMedicine = await Medicine.findById(medicineId);
-    if (!existingMedicine || existingMedicine.isDeleted) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found or has already been deleted');
-    }
-    // Soft delete the medicine
-    existingMedicine.isDeleted = true;
-    await existingMedicine.save();
-    return true; // Return true to indicate successful deletion
-}
-
-
-//get all medicines service
-
-interface GetAllMedicinesParams {
-    search?: string;
-    status?: string;
-    sortBy?: string;
-    order?: 'asc' | 'desc';
-    limit?: number;
-    page?: number;
-}
-
+  if (!Types.ObjectId.isValid(medicineId)) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicine ID');
+  const existingMedicine = await Medicine.findById(medicineId);
+  if (!existingMedicine || existingMedicine.isDeleted) throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found');
+  existingMedicine.isDeleted = true;
+  await existingMedicine.save();
+  return true;
+};
 
 interface GetAllMedicinesParams {
   search?: string;
@@ -245,56 +230,26 @@ interface GetAllMedicinesParams {
 }
 
 export const getAllMedicinesService = async (query: GetAllMedicinesParams) => {
-  const {
-    search = '',
-    status = '',
-    expiry = '',
-    sortBy = 'expiryDate',
-    order = 'desc',
-    limit = 10,
-    page = 1,
-  } = query;
+  const { search = '', status = '', expiry = '', sortBy = 'expiryDate', order = 'desc', limit = 10, page = 1 } = query;
+  const filter: Record<string, any> = { isDeleted: false };
 
-  const filter: Record<string, any> = {
-    isDeleted: false,
-  };
+  if (search.trim()) filter.$or = [
+    { brandName: { $regex: search, $options: 'i' } },
+    { genericName: { $regex: search, $options: 'i' } },
+    { batchNumber: { $regex: search, $options: 'i' } },
+  ];
 
-  // Search by text
-  if (search.trim()) {
-    filter.$or = [
-      { brandName: { $regex: search, $options: 'i' } },
-      { genericName: { $regex: search, $options: 'i' } },
-      { batchNumber: { $regex: search, $options: 'i' } },
-    ];
-  }
+  if (status) filter.status = status;
 
-  // Filter by status
-  if (status) {
-    filter.status = status;
-  }
-
-  // Filter by expiry
   if (expiry === '30days' || expiry === '6months') {
     const now = new Date();
-    const futureDate = new Date();
-
-    if (expiry === '30days') {
-      futureDate.setDate(now.getDate() + 30);
-    } else if (expiry === '6months') {
-      futureDate.setMonth(now.getMonth() + 6);
-    }
-
-    filter.expiryDate = {
-      $gte: now,
-      $lte: futureDate,
-    };
+    const future = new Date();
+    if (expiry === '30days') future.setDate(now.getDate() + 30);
+    else future.setMonth(now.getMonth() + 6);
+    filter.expiryDate = { $gte: now, $lte: future };
   }
 
-  // Sort
-  const sort: Record<string, 1 | -1> = {
-    [sortBy]: order === 'asc' ? 1 : -1,
-  };
-
+  const sort: Record<string, 1 | -1> = { [sortBy]: order === 'asc' ? 1 : -1 };
   const skip = (page - 1) * limit;
 
   const [medicines, total] = await Promise.all([
@@ -302,12 +257,5 @@ export const getAllMedicinesService = async (query: GetAllMedicinesParams) => {
     Medicine.countDocuments(filter),
   ]);
 
-  return {
-    medicines,
-    total,
-    page,
-    perPage: limit,
-    totalPages: Math.ceil(total / limit),
-  };
+  return { medicines, total, page, perPage: limit, totalPages: Math.ceil(total / limit) };
 };
-

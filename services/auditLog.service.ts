@@ -4,7 +4,7 @@ import { Types } from 'mongoose';
 interface CreateAuditLogInput {
   userId: Types.ObjectId;
   userName: string;
-  action: 'Add' | 'Edit' | 'Delete' | 'Sell';
+  action: 'Add' | 'Edit' | 'Delete' | 'Sell' | 'Transfer';
   details: string;
 }
 

@@ -9,110 +9,76 @@ export const getReports = async (range: string) => {
   const lowStockCount = await Medicine.countDocuments({ status: 'low-stock', isDeleted: false });
   const outOfStockCount = await Medicine.countDocuments({ status: 'out-of-stock', isDeleted: false });
 
-  // KPI: Total Sales and Total Sold Value
-  const salesWithPrices = await MedicineSale.aggregate([
+  // KPI: Total Sales (units sold), Total Revenue, Total Profit
+  const salesAgg = await MedicineSale.aggregate([
+    { $match: { soldAt: { $gte: start, $lte: end } } },
     {
-      $match: {
-        soldAt: { $gte: start, $lte: end }
-      }
+      $group: {
+        _id: null,
+        totalUnitsSold: { $sum: '$quantitySold' },
+        totalRevenue: { $sum: { $multiply: ['$quantitySold', '$sellingPrice'] } },
+        totalProfit: { $sum: '$profit' },
+      },
     },
-    {
-      $lookup: {
-        from: 'medicines',
-        localField: 'medicineId',
-        foreignField: '_id',
-        as: 'medicineInfo'
-      }
-    },
-    {
-      $unwind: '$medicineInfo'
-    },
-    {
-      $project: {
-        quantitySold: 1,
-        pricePerUnit: '$medicineInfo.pricePerUnit'
-      }
-    }
   ]);
 
-  const totalSales = salesWithPrices.reduce((acc, sale) => acc + sale.quantitySold, 0);
-  const soldValue = salesWithPrices.reduce(
-    (acc, sale) => acc + sale.quantitySold * sale.pricePerUnit,
-    0
-  );
+  const totalUnitsSold = salesAgg[0]?.totalUnitsSold || 0;
+  const totalRevenue = salesAgg[0]?.totalRevenue || 0;
+  const totalProfit = salesAgg[0]?.totalProfit || 0;
 
   // Trend Data (grouped by day)
   const trend = await MedicineSale.aggregate([
-    {
-      $match: {
-        soldAt: { $gte: start, $lte: end }
-      }
-    },
+    { $match: { soldAt: { $gte: start, $lte: end } } },
     {
       $group: {
-        _id: {
-          $dateToString: {
-            format: '%Y-%m-%d',
-            date: '$soldAt'
-          }
-        },
-        totalQuantity: { $sum: '$quantitySold' }
-      }
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$soldAt' } },
+        unitsSold: { $sum: '$quantitySold' },
+        revenue: { $sum: { $multiply: ['$quantitySold', '$sellingPrice'] } },
+        profit: { $sum: '$profit' },
+      },
     },
-    {
-      $sort: { _id: 1 }
-    }
+    { $sort: { _id: 1 } },
   ]);
 
-  // Top Sellers with Revenue
-  const topSellers = await MedicineSale.aggregate([
-    {
-      $match: {
-        soldAt: { $gte: start, $lte: end }
-      }
-    },
+  // Full list of sold medicines in the range
+  const soldMedicines = await MedicineSale.aggregate([
+    { $match: { soldAt: { $gte: start, $lte: end } } },
     {
       $lookup: {
         from: 'medicines',
         localField: 'medicineId',
         foreignField: '_id',
-        as: 'medicineInfo'
-      }
+        as: 'medicineInfo',
+      },
     },
-    {
-      $unwind: '$medicineInfo'
-    },
-    {
-      $group: {
-        _id: '$medicineInfo.brandName',
-        quantitySold: { $sum: '$quantitySold' },
-        revenue: { $sum: { $multiply: ['$quantitySold', '$medicineInfo.pricePerUnit'] } }
-      }
-    },
-    {
-      $sort: { quantitySold: -1 }
-    },
-    {
-      $limit: 5
-    },
+    { $unwind: '$medicineInfo' },
     {
       $project: {
-        brandName: '$_id',
+        _id: 0,
+        brandName: 1,
+        genericName: '$medicineInfo.genericName',
+        batchNumber: 1,
+        strength: '$medicineInfo.strength',
+        sellingPrice: 1,
+        purchaseCost: '$medicineInfo.purchaseCost',
         quantitySold: 1,
-        revenue: 1,
-        _id: 0
-      }
-    }
+        revenue: { $multiply: ['$quantitySold', '$sellingPrice'] },
+        profit: 1,
+        soldAt: 1,
+      },
+    },
+    { $sort: { soldAt: -1 } }, // latest sales first
   ]);
 
   return {
     kpis: {
-      totalSales,
-      soldValue: Math.round(soldValue),
+      totalUnitsSold,
+      totalRevenue: Math.round(totalRevenue),
+      totalProfit: Math.round(totalProfit),
       lowStockCount,
-      outOfStockCount
+      outOfStockCount,
     },
     trend,
-    topSellers
+    soldMedicines, // full list for report generation
   };
 };

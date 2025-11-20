@@ -1,5 +1,5 @@
 import express from 'express';
-import { createMedicine, deleteMedicine, getAllMedicines, getMedicine, updateMedicine } from '../controllers/medicine.controller';
+import { createMedicine, deleteMedicine, getAllMedicines, updateMedicine, getMedicine, moveToDispenser, getMedicinesInDispenser } from '../controllers/medicine.controller';
 import { requireSignIn, adminMiddleware } from '../middlewares/auth.middleware';
 const multer = require('multer');
 const router = express.Router();
@@ -39,6 +39,25 @@ router.delete(
   adminMiddleware,
   deleteMedicine
 );
+
+// Move stock from Store to Dispenser
+
+router.post(
+  '/move-to-dispenser/:medicineId',
+  requireSignIn,
+  adminMiddleware,
+  moveToDispenser
+);
+
+//medicines in dispenser
+router.get(
+  '/get/dispenser',
+  requireSignIn,
+  adminMiddleware,
+  getMedicinesInDispenser
+);
+
+
 
 // Export the router
 export default router;

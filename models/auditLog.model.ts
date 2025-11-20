@@ -3,7 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IAuditLog extends Document {
   userId: mongoose.Types.ObjectId;
   userName: string;
-  action: 'Add' | 'Edit' | 'Delete' | 'Sell';
+  action: 'Add' | 'Edit' | 'Delete' | 'Sell' | 'Transfer'; // Updated to include Transfer
   details: string;
   timestamp: Date;
 }
@@ -13,7 +13,7 @@ const auditLogSchema = new Schema<IAuditLog>({
   userName: { type: String, required: true },
   action: {
     type: String,
-    enum: ['Add', 'Edit', 'Delete', 'Sell'],
+    enum: ['Add', 'Edit', 'Delete', 'Sell', 'Transfer'], // Updated enum
     required: true,
   },
   details: { type: String, required: true },
@@ -21,3 +21,11 @@ const auditLogSchema = new Schema<IAuditLog>({
 });
 
 export const AuditLog = mongoose.model<IAuditLog>('AuditLog', auditLogSchema);
+
+// ✅ Updated CreateAuditLogInput Interface
+export interface CreateAuditLogInput {
+  userId: string;
+  userName: string;
+  action: 'Add' | 'Edit' | 'Delete' | 'Sell' | 'Transfer'; // Updated to include Transfer
+  details: string;
+}
