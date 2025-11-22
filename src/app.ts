@@ -8,6 +8,7 @@ import medicineRoutes from '../routes/medicine.routes';
 import sellRoutes from '../routes/sell.routes';
 import reportRoutes from '../routes/report.routes';
 import auditLogRoutes from '../routes/auditLog.route';
+import notificationRoutes from '../routes/notification.routes';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use('/api/medicines', medicineRoutes);
 app.use('/api/sell', sellRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Optional: Root health check
 app.get('/', (_, res) => {
