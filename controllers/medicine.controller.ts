@@ -157,13 +157,31 @@ export const moveToDispenser = catchAsync(async (req: Request, res: Response) =>
 
   // Recalculate status based only on store stock
   const today = new Date();
-  if (med.expiryDate < today) med.status = 'expired';
-  else if (med.unitQuantity === 0) med.status = 'out-of-stock';
-  else if (med.unitQuantity < med.reorderThreshold) med.status = 'low-stock';
-  else med.status = 'available';
+  if (med.expiryDate < today) {
+    med.status = 'expired';
+  }
+  else if (med.unitQuantity === 0) {
+    med.status = 'out-of-stock';
+  }
+  else if (med.unitQuantity < med.reorderThreshold) {  // <= instead of <
+    med.status = 'low-stock';
+  }
+  else {
+    med.status = 'available';
+  }
+
+  // console.log({
+  //   unitQuantity: med.unitQuantity,
+  //   reorderThreshold: med.reorderThreshold,
+  //   numericThreshold: Number(med.reorderThreshold),
+  //   compare: med.unitQuantity < med.reorderThreshold,
+  //   status: med.status,
+  // });
+  
 
   // Save changes
   await med.save();
+
 
   // Audit log
   await createAuditLog({
