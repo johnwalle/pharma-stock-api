@@ -11,6 +11,7 @@ export interface IUser extends Document {
   role: UserRole;
   googleId?: string;
   isDeleted: boolean;
+  fcmToken?: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -52,6 +53,9 @@ const UserSchema: Schema<IUser> = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    fcmToken: {
+      type: String,
+  },
   },
   {
     timestamps: true,

@@ -109,6 +109,32 @@ export const updateUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+export const saveFcmToken = catchAsync (async(req: Request, res: Response) => {
+  try {
+      const { fcmToken, userId } = req.body;
+
+      const user = await User.findById(userId);
+      if (!user || user.isDeleted) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+      }
+
+      if (!fcmToken) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'FCM token is required');
+      }
+
+
+      const updatedUser =  await user.updateOne({ fcmToken });
+      return res.status(httpStatus.OK).json({
+          success: true,
+          message: 'FCM token saved successfully',
+          updatedUser
+      });
+  } catch (error) {
+      console.error('Error saving FCM token:', error);
+      return new ApiError(500, 'Error saving FCM token');
+  }
+});
+
 /**
  * @desc    Soft-delete a user
  * @route   DELETE /api/v1/users/:id
