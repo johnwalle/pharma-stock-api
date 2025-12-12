@@ -8,7 +8,9 @@
     "skipLibCheck": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
     
-    "rootDir": "src",   // <-- add this
-    "outDir": "dist"    // <-- add this
-  }
+    "rootDir": ".",       // <-- point to project root
+    "outDir": "dist"      // <-- compiled files go here
+  },
+  "include": ["src/**/*"],  // <-- include all TS files in src
+  "exclude": ["node_modules", "dist"]
 }
