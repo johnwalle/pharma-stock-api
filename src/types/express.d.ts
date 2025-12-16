@@ -1,4 +1,6 @@
 import { Multer } from "multer";
+import {Iuser} from "../../models/user.model";
+
 
 declare global {
   namespace Express {
@@ -14,10 +16,7 @@ declare global {
       /**
        * Current authenticated user (sanitized)
        */
-      currentUser?: {
-        _id: string;
-        fullName: string;
-      };
+      currentUser?: Iuser;
 
       /**
        * Multer uploaded file
