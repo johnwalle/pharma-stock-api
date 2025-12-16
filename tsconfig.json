@@ -1,16 +1,19 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "esModuleInterop": true,
+    "target": "es2016",                   // Compiled JS target
+    "module": "commonjs",                 // Module system
+    "esModuleInterop": true,              // Allows default import of CommonJS modules
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "typeRoots": ["./node_modules/@types", "./src/types"],
-    
-    "rootDir": ".",       // <-- point to project root
-    "outDir": "dist"      // <-- compiled files go here
+    "strict": true,                       // Enable strict type-checking
+    "skipLibCheck": true,                 // Skip type checking for node_modules
+    "rootDir": ".",                        // Project root is the base for source files
+    "outDir": "dist",                      // Output compiled JS to dist
+    "moduleResolution": "node",            // Node-style module resolution
+    "resolveJsonModule": true,             // Allows importing JSON files
+    "isolatedModules": true,               // Useful for transpilers like Babel or ts-node
+    "typeRoots": ["./node_modules/@types", "./src/types"], // Include custom types
+    "noImplicitAny": true                  // Catch accidental any types
   },
-  "include": ["src/**/*"],  // <-- include all TS files in src
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*"],                  // Include all TS files in src
+  "exclude": ["node_modules", "dist"]       // Exclude node_modules and output
 }

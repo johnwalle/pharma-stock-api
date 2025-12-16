@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync';
+import { Types } from "mongoose";
 import { getDashboardAnalyticsService } from '../services/dashboard.service';
 import { sellMedicineService } from '../services/sell.service';
 import { createAuditLog } from '../services/auditLog.service';
@@ -17,6 +18,10 @@ interface CartItem {
 // Bulk Sell Controller
 // ---------------------
 export const bulkSellMedicineController = catchAsync(async (req: Request, res: Response) => {
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
+
   const { cart } = req.body as { cart: CartItem[] };
 
   if (!cart || !Array.isArray(cart) || cart.length === 0) {
@@ -59,7 +64,7 @@ export const bulkSellMedicineController = catchAsync(async (req: Request, res: R
     .join('; ');
 
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: 'Sell',
     details: `Sold medicines: ${auditDetails}`,
@@ -78,6 +83,10 @@ export const bulkSellMedicineController = catchAsync(async (req: Request, res: R
 export const sellMedicineController = catchAsync(async (req: Request, res: Response) => {
   const { medicineId, quantity } = req.body;
 
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
+
   if (!medicineId || !quantity || quantity < 1) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid medicineId or quantity');
   }
@@ -94,7 +103,7 @@ export const sellMedicineController = catchAsync(async (req: Request, res: Respo
   const result = await sellMedicineService({ medicineId, quantity });
 
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: 'Sell',
     details: `Sold medicine: ${result.brandName} (${result.genericName}, ${result.strength}, Batch: ${result.batchNumber}, Qty: ${result.quantitySold}, Selling: ${result.sellingPrice}, Cost: ${result.purchaseCost}, Profit: ${result.profit.toFixed(

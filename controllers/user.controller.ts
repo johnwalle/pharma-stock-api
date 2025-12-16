@@ -209,7 +209,11 @@ export const createUserByAdmin = catchAsync(async (req: Request, res: Response) 
 // get all users
 
 export const getUsers = catchAsync(async (req: Request, res: Response) => {
-  const currentUserId = req.currentUser?._id.toString();
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
+  
+  const currentUserId = req.currentUser._id.toString();
   const users = await userService.getUsersService(currentUserId);
   res.status(httpStatus.OK).json({
     success: true,

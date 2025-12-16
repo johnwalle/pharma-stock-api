@@ -3,6 +3,8 @@ import httpStatus from 'http-status';
 import ApiError from '../utils/ApiError';
 import catchAsync from '../utils/catchAsync';
 import Medicine from '../models/medicine.model';
+import { Types } from "mongoose";
+
 import {
   createMedicineService,
   updateMedicineService,
@@ -17,9 +19,12 @@ import { createAuditLog } from '../services/auditLog.service';
 // ----------------------------------------------------
 
 export const createMedicine = catchAsync(async (req: Request, res: Response) => {
-  console.log("Received create medicine request with body:", req.body);
-  console.log("Uploaded image file:", req.file);
 
+
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
+  
   const {
     brandName,
     genericName,
@@ -117,7 +122,7 @@ export const createMedicine = catchAsync(async (req: Request, res: Response) => 
 
   // AUDIT LOG
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: "Add",
     details: `Added medicine: ${brandName} (${strength}, Batch: ${batchNumber}, Qty in Store: ${unitQuantity})`,
@@ -138,6 +143,10 @@ export const createMedicine = catchAsync(async (req: Request, res: Response) => 
 export const moveToDispenser = catchAsync(async (req: Request, res: Response) => {
   const { medicineId } = req.params;
   const { quantity } = req.body;
+
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
 
   if (!quantity || quantity <= 0) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid move quantity');
@@ -177,7 +186,7 @@ export const moveToDispenser = catchAsync(async (req: Request, res: Response) =>
   //   compare: med.unitQuantity < med.reorderThreshold,
   //   status: med.status,
   // });
-  
+
 
   // Save changes
   await med.save();
@@ -185,7 +194,7 @@ export const moveToDispenser = catchAsync(async (req: Request, res: Response) =>
 
   // Audit log
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: 'Transfer',
     details: `Moved ${quantity} units of ${med.brandName} (${med.strength}) from Store → Dispenser`,
@@ -204,6 +213,10 @@ export const moveToDispenser = catchAsync(async (req: Request, res: Response) =>
 // ----------------------------------------------------
 export const updateMedicine = catchAsync(async (req: Request, res: Response) => {
   const { medicineId } = req.params;
+
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
 
   const existingMedicine = await getMedicineById(medicineId);
   if (!existingMedicine) {
@@ -297,7 +310,7 @@ export const updateMedicine = catchAsync(async (req: Request, res: Response) => 
 
   // Create audit log
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: 'Edit',
     details: `Updated medicine: ${brandName || existingMedicine.brandName} (${strength || existingMedicine.strength}, Batch: ${batchNumber || existingMedicine.batchNumber})`,
@@ -316,13 +329,17 @@ export const updateMedicine = catchAsync(async (req: Request, res: Response) => 
 export const deleteMedicine = catchAsync(async (req: Request, res: Response) => {
   const { medicineId } = req.params;
 
+  if (!req.currentUser) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, "Unauthorized");
+  }
+
   const medicine = await getMedicineById(medicineId);
   if (!medicine) throw new ApiError(httpStatus.NOT_FOUND, 'Medicine not found');
 
   await deleteMedicineService(medicineId);
 
   await createAuditLog({
-    userId: req.currentUser._id,
+    userId: new Types.ObjectId(req.currentUser._id),
     userName: req.currentUser.fullName,
     action: 'Delete',
     details: `Deleted medicine: ${medicine.brandName} (${medicine.strength}, Batch: ${medicine.batchNumber})`,
