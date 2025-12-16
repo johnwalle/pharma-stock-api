@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import Medicine, { IMedicine } from '../models/medicine.model';
 import ApiError from '../utils/ApiError';
 import logger from '../config/logger';
-const cloudinary = require('../config/cloudinary.config');
+import cloudinary from '../config/cloudinary.config';
 
 interface CreateMedicineInput extends Partial<IMedicine> {
   file?: Express.Multer.File;
